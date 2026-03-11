@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2 } from 'lucide-react';
+import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2, Eye } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { Document, Packer, Paragraph, ImageRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 
 interface InvoiceItem {
@@ -52,6 +52,7 @@ export default function App() {
   });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingWord, setIsGeneratingWord] = useState(false);
 
@@ -100,42 +101,131 @@ export default function App() {
   };
 
   const downloadWord = async () => {
-    const element = document.getElementById('invoice-preview');
-    if (!element) return;
-    
     setIsGeneratingWord(true);
     try {
-      const canvas = await html2canvas(element, { 
-        scale: 2, // 2 is enough for Word, keeps file size reasonable
-        useCORS: true,
-        logging: false
-      });
-      
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      if (!blob) throw new Error('Could not generate image blob');
-      
-      const arrayBuffer = await blob.arrayBuffer();
-      
+      const children: any[] = [];
+
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: data.companyName, bold: true, size: 48 })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: data.companySubtitle, size: 24, color: "666666" })],
+        }),
+        new Paragraph({ text: "" }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: `رقم الفاتورة: ${data.invoiceNumber}` })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: `التاريخ: ${data.date}` })],
+        }),
+        new Paragraph({ text: "" }),
+        new Paragraph({ text: "--------------------------------------------------" }),
+        new Paragraph({ text: "" }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: "بيانات العميل", bold: true, size: 28 })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: `الاسم: ${data.customerName}` })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: `العنوان: ${data.customerAddress}` })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: `رقم التواصل: ${data.phone1} ${data.phone2 ? ' / ' + data.phone2 : ''}` })],
+        }),
+        new Paragraph({ text: "" }),
+      );
+
+      const tableRows = [
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ text: "الإجمالي", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
+            new TableCell({ children: [new Paragraph({ text: "السعر", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
+            new TableCell({ children: [new Paragraph({ text: "الكمية", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
+            new TableCell({ children: [new Paragraph({ text: "الصنف", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
+          ]
+        }),
+        ...data.items.map(item => new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ text: `${item.quantity * item.price} ج.م`, alignment: AlignmentType.CENTER })] }),
+            new TableCell({ children: [new Paragraph({ text: `${item.price} ج.م`, alignment: AlignmentType.CENTER })] }),
+            new TableCell({ children: [new Paragraph({ text: `${item.quantity}`, alignment: AlignmentType.CENTER })] }),
+            new TableCell({ children: [new Paragraph({ text: item.name, alignment: AlignmentType.RIGHT })] }),
+          ]
+        }))
+      ];
+
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: tableRows,
+        }),
+        new Paragraph({ text: "" }),
+        new Paragraph({ text: "" })
+      );
+
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.LEFT,
+          children: [new TextRun({ text: `مصاريف الشحن: ${data.shippingCost} ج.م` })],
+        })
+      );
+
+      if (data.deposit > 0) {
+        children.push(
+          new Paragraph({
+            alignment: AlignmentType.LEFT,
+            children: [new TextRun({ text: `المدفوع مقدماً: ${data.deposit} ج.م` })],
+          })
+        );
+      }
+
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.LEFT,
+          children: [new TextRun({ text: `الإجمالي: ${calculateTotal()} ج.م`, bold: true, size: 32 })],
+        })
+      );
+
+      if (data.deposit > 0) {
+        children.push(
+          new Paragraph({
+            alignment: AlignmentType.LEFT,
+            children: [new TextRun({ text: `المتبقي: ${calculateTotal() - data.deposit} ج.م`, bold: true, size: 28 })],
+          })
+        );
+      }
+
+      children.push(
+        new Paragraph({ text: "" }),
+        new Paragraph({ text: "" }),
+        new Paragraph({ text: "--------------------------------------------------" }),
+        new Paragraph({ text: "" }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: data.signatureText })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: data.footerText, color: "888888" })],
+        })
+      );
+
       const doc = new Document({
         sections: [{
           properties: {
-            page: {
-              margin: { top: 0, right: 0, bottom: 0, left: 0 },
-            },
+            page: { margin: { top: 1000, right: 1000, bottom: 1000, left: 1000 } },
           },
-          children: [
-            new Paragraph({
-              children: [
-                new ImageRun({
-                  data: arrayBuffer,
-                  transformation: {
-                    width: 794, // A4 width in px at 96dpi
-                    height: 1123, // A4 height in px at 96dpi
-                  },
-                }),
-              ],
-            }),
-          ],
+          children: children,
         }],
       });
       
@@ -274,25 +364,11 @@ export default function App() {
         {/* Form Section */}
         <div className="xl:col-span-4 space-y-6 no-print sticky top-8">
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
-            <div className="flex flex-col gap-4 border-b pb-4">
+            <div className="flex justify-between items-center border-b pb-4">
               <h2 className="text-xl font-bold text-gray-800">إعدادات الفاتورة</h2>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm flex-1 sm:flex-none" title="الإعدادات">
-                  <Settings size={20} />
-                </button>
-                <button onClick={handlePrint} className="bg-[#3b3b98] text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-md flex-1 sm:flex-none">
-                  <Printer size={20} />
-                  <span className="text-sm">طباعة</span>
-                </button>
-                <button onClick={downloadPDF} disabled={isGeneratingPDF} className="bg-red-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition font-bold shadow-md disabled:opacity-50 flex-1 sm:flex-none">
-                  {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
-                  <span className="text-sm">PDF</span>
-                </button>
-                <button onClick={downloadWord} disabled={isGeneratingWord} className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition font-bold shadow-md disabled:opacity-50 flex-1 sm:flex-none">
-                  {isGeneratingWord ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
-                  <span className="text-sm">Word</span>
-                </button>
-              </div>
+              <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm" title="الإعدادات">
+                <Settings size={20} />
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -372,7 +448,27 @@ export default function App() {
         </div>
 
         {/* Preview Section */}
-        <div className="xl:col-span-8 w-full overflow-x-auto pb-8 rounded-2xl">
+        <div className={`fixed inset-0 z-50 bg-gray-100 xl:static xl:bg-transparent xl:z-auto xl:col-span-8 w-full overflow-y-auto pb-8 rounded-2xl transition-all ${showPreview ? 'block' : 'hidden xl:block'}`}>
+          
+          {/* Action Buttons Header */}
+          <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-4 flex flex-wrap justify-center gap-3 border-b xl:border-none mb-4 shadow-sm xl:shadow-none no-print">
+            <button onClick={() => setShowPreview(false)} className="xl:hidden bg-white text-gray-800 px-4 py-2 rounded-xl flex items-center gap-2 font-bold shadow-sm border hover:bg-gray-50">
+              <X size={20} /> إغلاق
+            </button>
+            <button onClick={handlePrint} className="bg-[#3b3b98] text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-md">
+              <Printer size={20} />
+              <span>طباعة</span>
+            </button>
+            <button onClick={downloadPDF} disabled={isGeneratingPDF} className="bg-red-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition font-bold shadow-md disabled:opacity-50">
+              {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
+              <span>تحميل PDF</span>
+            </button>
+            <button onClick={downloadWord} disabled={isGeneratingWord} className="bg-blue-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition font-bold shadow-md disabled:opacity-50">
+              {isGeneratingWord ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
+              <span>تحميل Word (قابل للتعديل)</span>
+            </button>
+          </div>
+
           <div className="flex justify-center min-w-max p-4">
             <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-12 w-[21cm] min-h-[29.7cm] invoice-container relative mx-auto" dir="rtl">
               
@@ -501,6 +597,15 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* Mobile Floating Button */}
+      <button
+        onClick={() => setShowPreview(true)}
+        className="xl:hidden fixed bottom-6 right-6 bg-[#3b3b98] text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-40 font-bold hover:bg-indigo-800 transition-transform hover:scale-105"
+      >
+        <Eye size={24} />
+        <span>أظهر الفاتورة</span>
+      </button>
     </div>
   );
 }
