@@ -77,7 +77,8 @@ export default function App() {
       const canvas = await html2canvas(element, { 
         scale: 3, // High quality
         useCORS: true,
-        logging: false
+        logging: false,
+        scrollY: 0
       });
       
       const imgData = canvas.toDataURL('image/png');
@@ -470,7 +471,7 @@ export default function App() {
           </div>
 
           <div className="flex justify-center min-w-max p-4">
-            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-12 w-[21cm] min-h-[29.7cm] invoice-container relative mx-auto" dir="rtl">
+            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-12 w-[21cm] min-h-[29.7cm] flex flex-col invoice-container relative mx-auto" dir="rtl">
               
               {/* Header */}
               <div className="flex justify-between items-start">
@@ -582,7 +583,7 @@ export default function App() {
               </div>
 
               {/* Footer */}
-              <div className="flex justify-between items-end mt-20 pt-8 absolute bottom-12 left-12 right-12">
+              <div className="flex justify-between items-end mt-auto pt-8">
                 <div className="text-[#d1d5db] italic font-bold text-2xl" style={{ fontFamily: 'Georgia, serif' }}>
                   {data.footerText}
                 </div>
