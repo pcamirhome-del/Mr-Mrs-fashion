@@ -345,7 +345,7 @@ export default function App() {
         {/* Preview Section */}
         <div className="xl:col-span-8 w-full overflow-x-auto pb-8 rounded-2xl">
           <div className="flex justify-center min-w-max p-4">
-            <div id="invoice-preview" className="bg-white shadow-xl p-12 w-[21cm] min-h-[29.7cm] invoice-container relative mx-auto" dir="rtl">
+            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-12 w-[21cm] min-h-[29.7cm] invoice-container relative mx-auto" dir="rtl">
               
               {/* Header */}
               <div className="flex justify-between items-start">
@@ -354,20 +354,20 @@ export default function App() {
                   <h1 className="text-5xl font-black text-[#312e81] tracking-tight mb-2" style={{ fontFamily: 'Arial, sans-serif' }}>
                     {data.companyName}
                   </h1>
-                  <p className="text-gray-400 text-xl font-bold">{data.companySubtitle}</p>
-                  <div className="mt-6 text-gray-500 font-bold text-lg">
+                  <p className="text-[#9ca3af] text-xl font-bold">{data.companySubtitle}</p>
+                  <div className="mt-6 text-[#6b7280] font-bold text-lg">
                     <p>رقم الفاتورة: <span className="text-[#312e81]">{data.invoiceNumber}</span></p>
-                    <p>التاريخ: <span className="text-gray-500">{data.date}</span></p>
+                    <p>التاريخ: <span className="text-[#6b7280]">{data.date}</span></p>
                   </div>
                 </div>
 
                 {/* Left Side (Logo) */}
-                <div className="w-36 h-36 border border-gray-100 rounded-3xl flex items-center justify-center overflow-hidden bg-white p-2 shadow-sm">
+                <div className="w-36 h-36 border border-[#f3f4f6] rounded-3xl flex items-center justify-center overflow-hidden bg-[#ffffff] p-2 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]">
                   {data.logoUrl ? (
                     <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
                   ) : (
-                    <div className="text-center text-gray-300 flex flex-col items-center justify-center h-full w-full bg-gray-50 rounded-2xl">
-                      <ImageIcon className="w-10 h-10 mb-2 text-gray-300" strokeWidth={1.5} />
+                    <div className="text-center text-[#d1d5db] flex flex-col items-center justify-center h-full w-full bg-[#f9fafb] rounded-2xl">
+                      <ImageIcon className="w-10 h-10 mb-2 text-[#d1d5db]" strokeWidth={1.5} />
                       <span className="text-xs font-bold">شعار الشركة</span>
                     </div>
                   )}
@@ -378,23 +378,23 @@ export default function App() {
               <div className="h-1.5 bg-[#4f46e5] w-full my-10 rounded-full"></div>
 
               {/* Customer Info */}
-              <div className="bg-[#f8f9fa] rounded-3xl p-8 flex justify-between items-center mb-10 border border-gray-100">
+              <div className="bg-[#f8f9fa] rounded-3xl p-8 flex justify-between items-center mb-10 border border-[#f3f4f6]">
                 <div className="text-right">
-                  <p className="text-gray-400 text-sm font-bold mb-2">بيانات العميل</p>
-                  <h2 className="text-3xl font-bold text-gray-900">{data.customerName}</h2>
-                  <p className="text-gray-500 font-bold text-xl mt-2">{data.customerAddress}</p>
+                  <p className="text-[#9ca3af] text-sm font-bold mb-2">بيانات العميل</p>
+                  <h2 className="text-3xl font-bold text-[#111827]">{data.customerName}</h2>
+                  <p className="text-[#6b7280] font-bold text-xl mt-2">{data.customerAddress}</p>
                 </div>
                 <div className="text-left" dir="ltr">
-                  <p className="text-gray-400 text-sm font-bold mb-2 text-right" dir="rtl">أرقام التواصل</p>
-                  <p className="text-2xl font-bold text-gray-900">{data.phone1}</p>
-                  {data.phone2 && <p className="text-2xl font-bold text-gray-900 mt-1">{data.phone2}</p>}
+                  <p className="text-[#9ca3af] text-sm font-bold mb-2 text-right" dir="rtl">أرقام التواصل</p>
+                  <p className="text-2xl font-bold text-[#111827]">{data.phone1}</p>
+                  {data.phone2 && <p className="text-2xl font-bold text-[#111827] mt-1">{data.phone2}</p>}
                 </div>
               </div>
 
               {/* Table */}
               <div className="mb-10 min-h-[200px]">
                 {/* Table Header */}
-                <div className="flex border-b-[3px] border-gray-800 pb-4 mb-6 text-gray-400 font-bold text-xl">
+                <div className="flex border-b-[3px] border-[#1f2937] pb-4 mb-6 text-[#9ca3af] font-bold text-xl">
                   <div className="flex-grow text-right">الصنف</div>
                   <div className="w-28 text-center">الكمية</div>
                   <div className="w-40 text-center">السعر</div>
@@ -404,7 +404,7 @@ export default function App() {
                 {/* Table Body */}
                 <div className="space-y-6">
                   {data.items.map((item) => (
-                    <div key={item.id} className="flex text-2xl font-bold text-gray-900 items-center">
+                    <div key={item.id} className="flex text-2xl font-bold text-[#111827] items-center">
                       <div className="flex-grow text-right">{item.name}</div>
                       <div className="w-28 text-center">{item.quantity}</div>
                       <div className="w-40 text-center">{item.price} ج.م</div>
@@ -415,26 +415,26 @@ export default function App() {
               </div>
 
               {/* Table Footer Line */}
-              <div className="border-b-[3px] border-gray-800 mb-8"></div>
+              <div className="border-b-[3px] border-[#1f2937] mb-8"></div>
 
               {/* Totals */}
               <div className="flex justify-start mb-32">
                 <div className="w-80">
-                  <div className="flex justify-between text-gray-500 font-bold text-xl mb-3 px-2">
+                  <div className="flex justify-between text-[#6b7280] font-bold text-xl mb-3 px-2">
                     <span>مصاريف الشحن</span>
                     <span>{data.shippingCost} ج.م</span>
                   </div>
                   
                   {data.deposit > 0 && (
-                    <div className="flex justify-between text-emerald-600 font-bold text-xl mb-3 px-2">
+                    <div className="flex justify-between text-[#059669] font-bold text-xl mb-3 px-2">
                       <span>المدفوع مقدماً</span>
                       <span>{data.deposit} ج.م</span>
                     </div>
                   )}
 
                   <div className="bg-[#eef2ff] rounded-2xl p-5 flex justify-between items-center mt-4">
-                    <span className="font-bold text-3xl text-gray-900">الإجمالي:</span>
-                    <span className="font-black text-3xl text-gray-900">{calculateTotal()} ج.م</span>
+                    <span className="font-bold text-3xl text-[#111827]">الإجمالي:</span>
+                    <span className="font-black text-3xl text-[#111827]">{calculateTotal()} ج.م</span>
                   </div>
 
                   {data.deposit > 0 && (
@@ -448,12 +448,12 @@ export default function App() {
 
               {/* Footer */}
               <div className="flex justify-between items-end mt-20 pt-8 absolute bottom-12 left-12 right-12">
-                <div className="text-gray-300 italic font-bold text-2xl" style={{ fontFamily: 'Georgia, serif' }}>
+                <div className="text-[#d1d5db] italic font-bold text-2xl" style={{ fontFamily: 'Georgia, serif' }}>
                   {data.footerText}
                 </div>
                 <div className="text-center">
-                  <div className="w-56 border-t-[3px] border-gray-200 mb-3"></div>
-                  <span className="text-gray-400 font-bold text-lg">{data.signatureText}</span>
+                  <div className="w-56 border-t-[3px] border-[#e5e7eb] mb-3"></div>
+                  <span className="text-[#9ca3af] font-bold text-lg">{data.signatureText}</span>
                 </div>
               </div>
               
