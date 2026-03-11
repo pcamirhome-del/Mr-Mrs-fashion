@@ -367,9 +367,15 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
             <div className="flex justify-between items-center border-b pb-4">
               <h2 className="text-xl font-bold text-gray-800">إعدادات الفاتورة</h2>
-              <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm" title="الإعدادات">
-                <Settings size={20} />
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setShowPreview(true)} className="xl:hidden bg-[#3b3b98] text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-sm">
+                  <Eye size={20} />
+                  <span className="text-sm">أظهر الفاتورة</span>
+                </button>
+                <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm" title="الإعدادات">
+                  <Settings size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -598,15 +604,6 @@ export default function App() {
         </div>
 
       </div>
-
-      {/* Mobile Floating Button */}
-      <button
-        onClick={() => setShowPreview(true)}
-        className="xl:hidden fixed bottom-6 right-6 bg-[#3b3b98] text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-40 font-bold hover:bg-indigo-800 transition-transform hover:scale-105"
-      >
-        <Eye size={24} />
-        <span>أظهر الفاتورة</span>
-      </button>
     </div>
   );
 }
