@@ -1,0 +1,5 @@
+{
+  "name": "Invoice Generator",
+  "description": "A tool to generate and print invoices with deposit support.",
+  "requestFramePermissions": []
+}
