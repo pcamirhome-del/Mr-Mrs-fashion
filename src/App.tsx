@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X } from 'lucide-react';
+import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { Document, Packer, Paragraph, ImageRun } from 'docx';
+import { saveAs } from 'file-saver';
 
 interface InvoiceItem {
   id: string;
@@ -46,6 +50,8 @@ export default function App() {
   });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingWord, setIsGeneratingWord] = useState(false);
 
   const calculateSubtotal = () => {
     return data.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
@@ -57,6 +63,88 @@ export default function App() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const downloadPDF = async () => {
+    const element = document.getElementById('invoice-preview');
+    if (!element) return;
+    
+    setIsGeneratingPDF(true);
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 3, // High quality
+        useCORS: true,
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Invoice_${data.invoiceNumber}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('حدث خطأ أثناء إنشاء ملف PDF');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const downloadWord = async () => {
+    const element = document.getElementById('invoice-preview');
+    if (!element) return;
+    
+    setIsGeneratingWord(true);
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 2, // 2 is enough for Word, keeps file size reasonable
+        useCORS: true,
+        logging: false
+      });
+      
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Could not generate image blob');
+      
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              margin: { top: 0, right: 0, bottom: 0, left: 0 },
+            },
+          },
+          children: [
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: arrayBuffer,
+                  transformation: {
+                    width: 794, // A4 width in px at 96dpi
+                    height: 1123, // A4 height in px at 96dpi
+                  },
+                }),
+              ],
+            }),
+          ],
+        }],
+      });
+      
+      const docxBlob = await Packer.toBlob(doc);
+      saveAs(docxBlob, `Invoice_${data.invoiceNumber}.docx`);
+    } catch (error) {
+      console.error('Error generating Word document:', error);
+      alert('حدث خطأ أثناء إنشاء ملف Word');
+    } finally {
+      setIsGeneratingWord(false);
+    }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,15 +245,23 @@ export default function App() {
         {/* Form Section */}
         <div className="xl:col-span-4 space-y-6 no-print sticky top-8">
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
-            <div className="flex justify-between items-center border-b pb-4">
+            <div className="flex flex-col gap-4 border-b pb-4">
               <h2 className="text-xl font-bold text-gray-800">إعدادات الفاتورة</h2>
-              <div className="flex gap-2">
-                <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm flex-1 sm:flex-none" title="الإعدادات">
                   <Settings size={20} />
                 </button>
-                <button onClick={handlePrint} className="bg-[#3b3b98] text-white px-5 py-2 rounded-xl flex items-center gap-2 hover:bg-indigo-800 transition font-bold shadow-md">
+                <button onClick={handlePrint} className="bg-[#3b3b98] text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-md flex-1 sm:flex-none">
                   <Printer size={20} />
-                  طباعة
+                  <span className="text-sm">طباعة</span>
+                </button>
+                <button onClick={downloadPDF} disabled={isGeneratingPDF} className="bg-red-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition font-bold shadow-md disabled:opacity-50 flex-1 sm:flex-none">
+                  {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
+                  <span className="text-sm">PDF</span>
+                </button>
+                <button onClick={downloadWord} disabled={isGeneratingWord} className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition font-bold shadow-md disabled:opacity-50 flex-1 sm:flex-none">
+                  {isGeneratingWord ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
+                  <span className="text-sm">Word</span>
                 </button>
               </div>
             </div>
@@ -247,119 +343,121 @@ export default function App() {
         </div>
 
         {/* Preview Section */}
-        <div className="xl:col-span-8 flex justify-center overflow-x-auto pb-8">
-          <div className="bg-white shadow-xl p-12 w-[21cm] min-h-[29.7cm] invoice-container relative mx-auto" dir="rtl">
-            
-            {/* Header */}
-            <div className="flex justify-between items-start">
-              {/* Right Side (Text) */}
-              <div className="text-right pt-2">
-                <h1 className="text-5xl font-black text-[#312e81] tracking-tight mb-2" style={{ fontFamily: 'Arial, sans-serif' }}>
-                  {data.companyName}
-                </h1>
-                <p className="text-gray-400 text-xl font-bold">{data.companySubtitle}</p>
-                <div className="mt-6 text-gray-500 font-bold text-lg">
-                  <p>رقم الفاتورة: <span className="text-[#312e81]">{data.invoiceNumber}</span></p>
-                  <p>التاريخ: <span className="text-gray-500">{data.date}</span></p>
+        <div className="xl:col-span-8 w-full overflow-x-auto pb-8 rounded-2xl">
+          <div className="flex justify-center min-w-max p-4">
+            <div id="invoice-preview" className="bg-white shadow-xl p-12 w-[21cm] min-h-[29.7cm] invoice-container relative mx-auto" dir="rtl">
+              
+              {/* Header */}
+              <div className="flex justify-between items-start">
+                {/* Right Side (Text) */}
+                <div className="text-right pt-2">
+                  <h1 className="text-5xl font-black text-[#312e81] tracking-tight mb-2" style={{ fontFamily: 'Arial, sans-serif' }}>
+                    {data.companyName}
+                  </h1>
+                  <p className="text-gray-400 text-xl font-bold">{data.companySubtitle}</p>
+                  <div className="mt-6 text-gray-500 font-bold text-lg">
+                    <p>رقم الفاتورة: <span className="text-[#312e81]">{data.invoiceNumber}</span></p>
+                    <p>التاريخ: <span className="text-gray-500">{data.date}</span></p>
+                  </div>
+                </div>
+
+                {/* Left Side (Logo) */}
+                <div className="w-36 h-36 border border-gray-100 rounded-3xl flex items-center justify-center overflow-hidden bg-white p-2 shadow-sm">
+                  {data.logoUrl ? (
+                    <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  ) : (
+                    <div className="text-center text-gray-300 flex flex-col items-center justify-center h-full w-full bg-gray-50 rounded-2xl">
+                      <ImageIcon className="w-10 h-10 mb-2 text-gray-300" strokeWidth={1.5} />
+                      <span className="text-xs font-bold">شعار الشركة</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Left Side (Logo) */}
-              <div className="w-36 h-36 border border-gray-100 rounded-3xl flex items-center justify-center overflow-hidden bg-white p-2 shadow-sm">
-                {data.logoUrl ? (
-                  <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                ) : (
-                  <div className="text-center text-gray-300 flex flex-col items-center justify-center h-full w-full bg-gray-50 rounded-2xl">
-                    <ImageIcon className="w-10 h-10 mb-2 text-gray-300" strokeWidth={1.5} />
-                    <span className="text-xs font-bold">شعار الشركة</span>
-                  </div>
-                )}
-              </div>
-            </div>
+              {/* Blue Line */}
+              <div className="h-1.5 bg-[#4f46e5] w-full my-10 rounded-full"></div>
 
-            {/* Blue Line */}
-            <div className="h-1.5 bg-[#4f46e5] w-full my-10 rounded-full"></div>
-
-            {/* Customer Info */}
-            <div className="bg-[#f8f9fa] rounded-3xl p-8 flex justify-between items-center mb-10 border border-gray-100">
-              <div className="text-right">
-                <p className="text-gray-400 text-sm font-bold mb-2">بيانات العميل</p>
-                <h2 className="text-3xl font-bold text-gray-900">{data.customerName}</h2>
-                <p className="text-gray-500 font-bold text-xl mt-2">{data.customerAddress}</p>
-              </div>
-              <div className="text-left" dir="ltr">
-                <p className="text-gray-400 text-sm font-bold mb-2 text-right" dir="rtl">أرقام التواصل</p>
-                <p className="text-2xl font-bold text-gray-900">{data.phone1}</p>
-                {data.phone2 && <p className="text-2xl font-bold text-gray-900 mt-1">{data.phone2}</p>}
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="mb-10 min-h-[200px]">
-              {/* Table Header */}
-              <div className="flex border-b-[3px] border-gray-800 pb-4 mb-6 text-gray-400 font-bold text-xl">
-                <div className="flex-grow text-right">الصنف</div>
-                <div className="w-28 text-center">الكمية</div>
-                <div className="w-40 text-center">السعر</div>
-                <div className="w-40 text-left">الإجمالي</div>
-              </div>
-
-              {/* Table Body */}
-              <div className="space-y-6">
-                {data.items.map((item) => (
-                  <div key={item.id} className="flex text-2xl font-bold text-gray-900 items-center">
-                    <div className="flex-grow text-right">{item.name}</div>
-                    <div className="w-28 text-center">{item.quantity}</div>
-                    <div className="w-40 text-center">{item.price} ج.م</div>
-                    <div className="w-40 text-left">{item.quantity * item.price} ج.م</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Table Footer Line */}
-            <div className="border-b-[3px] border-gray-800 mb-8"></div>
-
-            {/* Totals */}
-            <div className="flex justify-start mb-32">
-              <div className="w-80">
-                <div className="flex justify-between text-gray-500 font-bold text-xl mb-3 px-2">
-                  <span>مصاريف الشحن</span>
-                  <span>{data.shippingCost} ج.م</span>
+              {/* Customer Info */}
+              <div className="bg-[#f8f9fa] rounded-3xl p-8 flex justify-between items-center mb-10 border border-gray-100">
+                <div className="text-right">
+                  <p className="text-gray-400 text-sm font-bold mb-2">بيانات العميل</p>
+                  <h2 className="text-3xl font-bold text-gray-900">{data.customerName}</h2>
+                  <p className="text-gray-500 font-bold text-xl mt-2">{data.customerAddress}</p>
                 </div>
-                
-                {data.deposit > 0 && (
-                  <div className="flex justify-between text-emerald-600 font-bold text-xl mb-3 px-2">
-                    <span>المدفوع مقدماً</span>
-                    <span>{data.deposit} ج.م</span>
-                  </div>
-                )}
+                <div className="text-left" dir="ltr">
+                  <p className="text-gray-400 text-sm font-bold mb-2 text-right" dir="rtl">أرقام التواصل</p>
+                  <p className="text-2xl font-bold text-gray-900">{data.phone1}</p>
+                  {data.phone2 && <p className="text-2xl font-bold text-gray-900 mt-1">{data.phone2}</p>}
+                </div>
+              </div>
 
-                <div className="bg-[#eef2ff] rounded-2xl p-5 flex justify-between items-center mt-4">
-                  <span className="font-bold text-3xl text-gray-900">الإجمالي:</span>
-                  <span className="font-black text-3xl text-gray-900">{calculateTotal()} ج.م</span>
+              {/* Table */}
+              <div className="mb-10 min-h-[200px]">
+                {/* Table Header */}
+                <div className="flex border-b-[3px] border-gray-800 pb-4 mb-6 text-gray-400 font-bold text-xl">
+                  <div className="flex-grow text-right">الصنف</div>
+                  <div className="w-28 text-center">الكمية</div>
+                  <div className="w-40 text-center">السعر</div>
+                  <div className="w-40 text-left">الإجمالي</div>
                 </div>
 
-                {data.deposit > 0 && (
-                  <div className="flex justify-between text-[#312e81] font-black text-2xl mt-6 px-2">
-                    <span>المتبقي:</span>
-                    <span>{calculateTotal() - data.deposit} ج.م</span>
-                  </div>
-                )}
+                {/* Table Body */}
+                <div className="space-y-6">
+                  {data.items.map((item) => (
+                    <div key={item.id} className="flex text-2xl font-bold text-gray-900 items-center">
+                      <div className="flex-grow text-right">{item.name}</div>
+                      <div className="w-28 text-center">{item.quantity}</div>
+                      <div className="w-40 text-center">{item.price} ج.م</div>
+                      <div className="w-40 text-left">{item.quantity * item.price} ج.م</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="flex justify-between items-end mt-20 pt-8 absolute bottom-12 left-12 right-12">
-              <div className="text-gray-300 italic font-bold text-2xl" style={{ fontFamily: 'Georgia, serif' }}>
-                {data.footerText}
+              {/* Table Footer Line */}
+              <div className="border-b-[3px] border-gray-800 mb-8"></div>
+
+              {/* Totals */}
+              <div className="flex justify-start mb-32">
+                <div className="w-80">
+                  <div className="flex justify-between text-gray-500 font-bold text-xl mb-3 px-2">
+                    <span>مصاريف الشحن</span>
+                    <span>{data.shippingCost} ج.م</span>
+                  </div>
+                  
+                  {data.deposit > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold text-xl mb-3 px-2">
+                      <span>المدفوع مقدماً</span>
+                      <span>{data.deposit} ج.م</span>
+                    </div>
+                  )}
+
+                  <div className="bg-[#eef2ff] rounded-2xl p-5 flex justify-between items-center mt-4">
+                    <span className="font-bold text-3xl text-gray-900">الإجمالي:</span>
+                    <span className="font-black text-3xl text-gray-900">{calculateTotal()} ج.م</span>
+                  </div>
+
+                  {data.deposit > 0 && (
+                    <div className="flex justify-between text-[#312e81] font-black text-2xl mt-6 px-2">
+                      <span>المتبقي:</span>
+                      <span>{calculateTotal() - data.deposit} ج.م</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-center">
-                <div className="w-56 border-t-[3px] border-gray-200 mb-3"></div>
-                <span className="text-gray-400 font-bold text-lg">{data.signatureText}</span>
+
+              {/* Footer */}
+              <div className="flex justify-between items-end mt-20 pt-8 absolute bottom-12 left-12 right-12">
+                <div className="text-gray-300 italic font-bold text-2xl" style={{ fontFamily: 'Georgia, serif' }}>
+                  {data.footerText}
+                </div>
+                <div className="text-center">
+                  <div className="w-56 border-t-[3px] border-gray-200 mb-3"></div>
+                  <span className="text-gray-400 font-bold text-lg">{data.signatureText}</span>
+                </div>
               </div>
+              
             </div>
-            
           </div>
         </div>
 
