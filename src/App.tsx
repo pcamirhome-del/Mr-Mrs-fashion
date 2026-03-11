@@ -23,6 +23,7 @@ interface InvoiceData {
   shippingCost: number;
   deposit: number;
   logoUrl: string;
+  qrCodeUrl: string;
   companyName: string;
   companySubtitle: string;
   footerText: string;
@@ -43,6 +44,7 @@ export default function App() {
     shippingCost: 0,
     deposit: 0,
     logoUrl: '',
+    qrCodeUrl: '',
     companyName: 'Mr & Mrs Fashion',
     companySubtitle: 'لأرقى الموديلات والأزياء الحديثة',
     footerText: 'Mr & Mrs Fashion',
@@ -158,6 +160,17 @@ export default function App() {
     }
   };
 
+  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setData({ ...data, qrCodeUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const addItem = () => {
     setData({
       ...data,
@@ -205,6 +218,22 @@ export default function App() {
                     type="file" 
                     accept="image/*" 
                     onChange={handleLogoUpload} 
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-[#3b3b98] hover:file:bg-indigo-100 cursor-pointer" 
+                  />
+                </div>
+              </div>
+
+              {/* QR Code Upload */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">رمز الاستجابة السريعة (QR Code)</label>
+                <div className="flex items-center gap-4">
+                  {data.qrCodeUrl && (
+                    <img src={data.qrCodeUrl} alt="QR preview" className="w-12 h-12 rounded object-contain border" />
+                  )}
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleQrUpload} 
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-[#3b3b98] hover:file:bg-indigo-100 cursor-pointer" 
                   />
                 </div>
@@ -417,8 +446,8 @@ export default function App() {
               {/* Table Footer Line */}
               <div className="border-b-[3px] border-[#1f2937] mb-8"></div>
 
-              {/* Totals */}
-              <div className="flex justify-start mb-32">
+              {/* Totals and QR */}
+              <div className="flex justify-between items-start mb-32">
                 <div className="w-80">
                   <div className="flex justify-between text-[#6b7280] font-bold text-xl mb-3 px-2">
                     <span>مصاريف الشحن</span>
@@ -444,6 +473,16 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                {/* QR Code */}
+                {data.qrCodeUrl && (
+                  <div className="flex flex-col items-center justify-center p-2">
+                    <div className="bg-white p-2 rounded-xl border border-[#e5e7eb] shadow-sm">
+                      <img src={data.qrCodeUrl} alt="QR Code" className="w-24 h-24 object-contain" />
+                    </div>
+                    <span className="text-[#4f46e5] font-black text-sm mt-2 tracking-widest uppercase" style={{ fontFamily: 'Arial, sans-serif' }}>Scan Me</span>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
