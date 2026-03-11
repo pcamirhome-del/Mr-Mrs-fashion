@@ -78,18 +78,21 @@ export default function App() {
         scale: 3, // High quality
         useCORS: true,
         logging: false,
-        scrollY: 0
+        scrollY: 0,
+        windowHeight: element.scrollHeight,
+        height: element.scrollHeight
       });
       
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
       
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfWidth = element.offsetWidth;
+      const pdfHeight = element.scrollHeight;
+      
+      const pdf = new jsPDF({
+        orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [pdfWidth, pdfHeight]
+      });
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       pdf.save(`Invoice_${data.invoiceNumber}.pdf`);
@@ -524,7 +527,7 @@ export default function App() {
               </div>
 
               {/* Table */}
-              <div className="mb-10 min-h-[200px]">
+              <div className="mb-4">
                 {/* Table Header */}
                 <div className="flex border-b-[3px] border-[#1f2937] pb-4 mb-6 text-[#9ca3af] font-bold text-xl">
                   <div className="flex-grow text-right">الصنف</div>
@@ -547,10 +550,10 @@ export default function App() {
               </div>
 
               {/* Table Footer Line */}
-              <div className="border-b-[3px] border-[#1f2937] mb-8"></div>
+              <div className="border-b-[3px] border-[#1f2937] mb-4 mt-6"></div>
 
               {/* Totals and QR */}
-              <div className="flex justify-between items-start mb-32">
+              <div className="flex justify-between items-start mb-12">
                 <div className="w-80">
                   <div className="flex justify-between text-[#6b7280] font-bold text-xl mb-3 px-2">
                     <span>مصاريف الشحن</span>
