@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2, Eye, Save, History, Edit } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
-import { saveAs } from 'file-saver';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from './firebase';
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
@@ -74,7 +72,6 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [isGeneratingWord, setIsGeneratingWord] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
@@ -504,145 +501,6 @@ export default function App() {
     }
   };
 
-  const downloadWord = async () => {
-    setIsGeneratingWord(true);
-    try {
-      const children: any[] = [];
-
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: data.companyName, bold: true, size: 48 })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: data.companySubtitle, size: 24, color: "666666" })],
-        }),
-        new Paragraph({ text: "" }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: `رقم الفاتورة: ${data.invoiceNumber}` })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: `التاريخ: ${data.date}` })],
-        }),
-        new Paragraph({ text: "" }),
-        new Paragraph({ text: "--------------------------------------------------" }),
-        new Paragraph({ text: "" }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: "بيانات العميل", bold: true, size: 28 })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: `الاسم: ${data.customerName}` })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: `العنوان: ${data.customerAddress}` })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: `رقم التواصل: ${data.phone1} ${data.phone2 ? ' / ' + data.phone2 : ''}` })],
-        }),
-        new Paragraph({ text: "" }),
-      );
-
-      const tableRows = [
-        new TableRow({
-          children: [
-            new TableCell({ children: [new Paragraph({ text: "الإجمالي", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
-            new TableCell({ children: [new Paragraph({ text: "السعر", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
-            new TableCell({ children: [new Paragraph({ text: "الكمية", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
-            new TableCell({ children: [new Paragraph({ text: "الصنف", alignment: AlignmentType.CENTER })], shading: { fill: "F3F4F6" } }),
-          ]
-        }),
-        ...data.items.map(item => new TableRow({
-          children: [
-            new TableCell({ children: [new Paragraph({ text: `${item.quantity * item.price} ج.م`, alignment: AlignmentType.CENTER })] }),
-            new TableCell({ children: [new Paragraph({ text: `${item.price} ج.م`, alignment: AlignmentType.CENTER })] }),
-            new TableCell({ children: [new Paragraph({ text: `${item.quantity}`, alignment: AlignmentType.CENTER })] }),
-            new TableCell({ children: [new Paragraph({ text: item.name, alignment: AlignmentType.RIGHT })] }),
-          ]
-        }))
-      ];
-
-      children.push(
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: tableRows,
-        }),
-        new Paragraph({ text: "" }),
-        new Paragraph({ text: "" })
-      );
-
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.LEFT,
-          children: [new TextRun({ text: `مصاريف الشحن: ${data.shippingCost} ج.م` })],
-        })
-      );
-
-      if (data.deposit > 0) {
-        children.push(
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            children: [new TextRun({ text: `المدفوع مقدماً: ${data.deposit} ج.م` })],
-          })
-        );
-      }
-
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.LEFT,
-          children: [new TextRun({ text: `الإجمالي: ${calculateTotal()} ج.م`, bold: true, size: 32 })],
-        })
-      );
-
-      if (data.deposit > 0) {
-        children.push(
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            children: [new TextRun({ text: `المتبقي: ${calculateTotal() - data.deposit} ج.م`, bold: true, size: 28 })],
-          })
-        );
-      }
-
-      children.push(
-        new Paragraph({ text: "" }),
-        new Paragraph({ text: "" }),
-        new Paragraph({ text: "--------------------------------------------------" }),
-        new Paragraph({ text: "" }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: data.signatureText })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: data.footerText, color: "888888" })],
-        })
-      );
-
-      const doc = new Document({
-        sections: [{
-          properties: {
-            page: { margin: { top: 1000, right: 1000, bottom: 1000, left: 1000 } },
-          },
-          children: children,
-        }],
-      });
-      
-      const docxBlob = await Packer.toBlob(doc);
-      saveAs(docxBlob, `Invoice_${data.invoiceNumber}.docx`);
-    } catch (error) {
-      console.error('Error generating Word document:', error);
-      alert('حدث خطأ أثناء إنشاء ملف Word');
-    } finally {
-      setIsGeneratingWord(false);
-    }
-  };
-
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -936,10 +794,6 @@ export default function App() {
             <button onClick={downloadPDF} disabled={isGeneratingPDF} className="bg-red-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition font-bold shadow-md disabled:opacity-50">
               {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
               <span>تحميل PDF</span>
-            </button>
-            <button onClick={downloadWord} disabled={isGeneratingWord} className="bg-blue-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition font-bold shadow-md disabled:opacity-50">
-              {isGeneratingWord ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
-              <span>تحميل Word (قابل للتعديل)</span>
             </button>
             <button onClick={handleSaveInvoice} disabled={isSaving} className="bg-emerald-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-700 transition font-bold shadow-md disabled:opacity-50">
               {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
