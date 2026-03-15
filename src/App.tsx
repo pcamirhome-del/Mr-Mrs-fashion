@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2, Eye, Save, History, Edit } from 'lucide-react';
+import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2, Eye, Save, History, Edit, Share2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from './firebase';
@@ -21,6 +21,7 @@ interface InvoiceData {
   phone2: string;
   items: InvoiceItem[];
   shippingCost: number;
+  baseProductPrice?: number;
   deposit: number;
   logoUrl: string;
   qrCodeUrl: string;
@@ -39,6 +40,7 @@ const initialData: InvoiceData = {
   phone2: '',
   items: [{ id: '1', name: '', quantity: 1, price: 0 }],
   shippingCost: 0,
+  baseProductPrice: 0,
   deposit: 0,
   logoUrl: '',
   qrCodeUrl: '',
@@ -60,6 +62,7 @@ export default function App() {
       { id: '1', name: 'توينز تريكومستورد', quantity: 1, price: 650 }
     ],
     shippingCost: 0,
+    baseProductPrice: 0,
     deposit: 0,
     logoUrl: '',
     qrCodeUrl: '',
@@ -73,6 +76,7 @@ export default function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
   const [savedInvoices, setSavedInvoices] = useState<any[]>([]);
@@ -213,6 +217,7 @@ export default function App() {
             updateDoc(invoiceRef, {
               items: editingInvoice.items,
               shippingCost: editingInvoice.shippingCost,
+              baseProductPrice: editingInvoice.baseProductPrice || 0,
               phone1: editingInvoice.phone1,
               phone2: editingInvoice.phone2,
               customerAddress: editingInvoice.customerAddress,
@@ -236,6 +241,7 @@ export default function App() {
             ...inv,
             items: editingInvoice.items,
             shippingCost: editingInvoice.shippingCost,
+            baseProductPrice: editingInvoice.baseProductPrice || 0,
             phone1: editingInvoice.phone1,
             phone2: editingInvoice.phone2,
             customerAddress: editingInvoice.customerAddress,
@@ -260,6 +266,7 @@ export default function App() {
           ...data,
           items: editingInvoice.items,
           shippingCost: editingInvoice.shippingCost,
+          baseProductPrice: editingInvoice.baseProductPrice || 0,
           phone1: editingInvoice.phone1,
           phone2: editingInvoice.phone2,
           customerAddress: editingInvoice.customerAddress,
@@ -501,6 +508,60 @@ export default function App() {
     }
   };
 
+  const handleShare = async () => {
+    const element = document.getElementById('invoice-preview');
+    if (!element) return;
+    
+    setIsSharing(true);
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        scrollY: 0,
+        windowHeight: element.scrollHeight,
+        height: element.scrollHeight
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const halfHeight = pageHeight / 2;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, halfHeight);
+      pdf.addImage(imgData, 'PNG', 0, halfHeight, pageWidth, halfHeight);
+      
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.setLineDashPattern([3, 3], 0);
+      pdf.line(0, halfHeight, pageWidth, halfHeight);
+      
+      const pdfBlob = pdf.output('blob');
+      const file = new File([pdfBlob], `Invoice_${data.invoiceNumber}.pdf`, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `فاتورة ${data.invoiceNumber}`,
+          text: 'مرفق الفاتورة الخاصة بك',
+          files: [file]
+        });
+      } else {
+        alert('عذراً، متصفحك لا يدعم مشاركة الملفات مباشرة. يمكنك تحميل الفاتورة ومشاركتها يدوياً.');
+      }
+    } catch (error) {
+      console.error('Error sharing PDF:', error);
+      alert('حدث خطأ أثناء مشاركة الفاتورة');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -547,6 +608,12 @@ export default function App() {
   const totalSales = savedInvoices.reduce((sum, inv) => {
     const invSubtotal = inv.items.reduce((itemSum: number, item: any) => itemSum + (item.quantity * item.price), 0);
     return sum + invSubtotal;
+  }, 0);
+
+  const totalNetProfit = savedInvoices.reduce((sum, inv) => {
+    const invSubtotal = inv.items.reduce((itemSum: number, item: any) => itemSum + (item.quantity * item.price), 0);
+    const basePrice = inv.baseProductPrice || 0;
+    return sum + (invSubtotal - basePrice);
   }, 0);
 
   return (
@@ -649,7 +716,13 @@ export default function App() {
 
           {activeTab === 'history' ? (
             <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <h2 className="text-xl font-bold text-gray-800 border-b pb-4 mb-4">الفواتير المحفوظة</h2>
+              <div className="flex justify-between items-center border-b pb-4 mb-4">
+                <h2 className="text-xl font-bold text-gray-800">الفواتير المحفوظة</h2>
+                <div className="bg-emerald-50 text-emerald-800 px-4 py-2 rounded-xl font-bold flex items-center gap-2 border border-emerald-100">
+                  <span>المكسب الصافي:</span>
+                  <span className="text-xl">{totalNetProfit} ج.م</span>
+                </div>
+              </div>
               
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-4 flex justify-between items-center">
                 <span className="font-bold text-indigo-900">إجمالي المبيعات (بدون التوصيل):</span>
@@ -659,7 +732,11 @@ export default function App() {
               {savedInvoices.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">لا توجد فواتير سابقة</p>
               ) : (
-                savedInvoices.map(inv => (
+                savedInvoices.map(inv => {
+                  const invSubtotal = inv.items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+                  const invProfit = invSubtotal - (inv.baseProductPrice || 0);
+                  
+                  return (
                   <div key={inv.id} onClick={() => {
                     setData(inv);
                     setShowPreview(true);
@@ -670,7 +747,10 @@ export default function App() {
                       <span className="text-sm font-bold text-gray-500">{inv.date}</span>
                     </div>
                     <div className="flex justify-between items-end">
-                      <p className="font-bold text-gray-800 text-lg">{inv.customerName}</p>
+                      <div>
+                        <p className="font-bold text-gray-800 text-lg">{inv.customerName}</p>
+                        <p className="text-sm text-emerald-600 font-bold mt-1">المكسب: {invProfit} ج.م</p>
+                      </div>
                       <div className="flex gap-2">
                         <button className="text-gray-400 hover:text-[#3b3b98] transition p-1">
                           <Edit size={18} />
@@ -684,7 +764,7 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                ))
+                )})
               )}
             </div>
           ) : (
@@ -771,9 +851,19 @@ export default function App() {
                 <input type="number" value={data.shippingCost} onChange={e => setData({...data, shippingCost: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-[#3b3b98] outline-none transition" />
               </div>
               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">سعر المنتج (الأساسي)</label>
+                <input type="number" value={data.baseProductPrice || 0} onChange={e => setData({...data, baseProductPrice: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-[#3b3b98] outline-none transition" />
+              </div>
+              <div className="col-span-2">
                 <label className="block text-sm font-bold text-gray-700 mb-1">المدفوع مقدماً</label>
                 <input type="number" value={data.deposit} onChange={e => setData({...data, deposit: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-[#3b3b98] outline-none transition" />
               </div>
+            </div>
+
+            {/* Summary Box */}
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mt-4 flex justify-between items-center">
+              <span className="font-bold text-indigo-900">إجمالي (سعر المنتج + الشحن) - داخلي فقط:</span>
+              <span className="text-xl font-black text-[#3b3b98]">{(data.baseProductPrice || 0) + (data.shippingCost || 0)} ج.م</span>
             </div>
           </div>
           )}
@@ -794,6 +884,10 @@ export default function App() {
             <button onClick={downloadPDF} disabled={isGeneratingPDF} className="bg-red-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition font-bold shadow-md disabled:opacity-50">
               {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
               <span>تحميل PDF</span>
+            </button>
+            <button onClick={handleShare} disabled={isSharing} className="bg-green-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-green-700 transition font-bold shadow-md disabled:opacity-50">
+              {isSharing ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
+              <span>مشاركة</span>
             </button>
             <button onClick={handleSaveInvoice} disabled={isSaving} className="bg-emerald-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-700 transition font-bold shadow-md disabled:opacity-50">
               {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
@@ -984,6 +1078,15 @@ export default function App() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">سعر المنتج (الأساسي)</label>
+                  <input 
+                    type="number" 
+                    value={editingInvoice.baseProductPrice || 0} 
+                    onChange={(e) => setEditingInvoice({...editingInvoice, baseProductPrice: Number(e.target.value)})}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">المدفوع مقدماً</label>
                   <input 
                     type="number" 
@@ -1019,6 +1122,12 @@ export default function App() {
                     className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none"
                   />
                 </div>
+              </div>
+
+              {/* Summary Box */}
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mt-4 flex justify-between items-center">
+                <span className="font-bold text-indigo-900">إجمالي (سعر المنتج + الشحن) - داخلي فقط:</span>
+                <span className="text-xl font-black text-[#3b3b98]">{(editingInvoice.baseProductPrice || 0) + (editingInvoice.shippingCost || 0)} ج.م</span>
               </div>
             </div>
 
