@@ -145,27 +145,52 @@ export default function App() {
       const singleWidth = element.offsetWidth;
       const singleHeight = element.scrollHeight;
       
-      const pdfWidth = singleWidth * 2;
-      const pdfHeight = singleHeight;
+      // --- 1. Landscape PDF (Side by Side) ---
+      const pdfLandscapeWidth = singleWidth * 2;
+      const pdfLandscapeHeight = singleHeight;
       
-      const pdf = new jsPDF({
+      const pdfLandscape = new jsPDF({
         orientation: 'landscape',
         unit: 'px',
-        format: [pdfWidth, pdfHeight]
+        format: [pdfLandscapeWidth, pdfLandscapeHeight]
       });
       
       // Draw first copy (right side in RTL)
-      pdf.addImage(imgData, 'PNG', singleWidth, 0, singleWidth, singleHeight);
+      pdfLandscape.addImage(imgData, 'PNG', singleWidth, 0, singleWidth, singleHeight);
       // Draw second copy (left side in RTL)
-      pdf.addImage(imgData, 'PNG', 0, 0, singleWidth, singleHeight);
+      pdfLandscape.addImage(imgData, 'PNG', 0, 0, singleWidth, singleHeight);
       
       // Add a dashed line in the middle
-      pdf.setDrawColor(200, 200, 200);
-      pdf.setLineWidth(2);
-      pdf.setLineDashPattern([10, 10], 0);
-      pdf.line(singleWidth, 0, singleWidth, pdfHeight);
+      pdfLandscape.setDrawColor(200, 200, 200);
+      pdfLandscape.setLineWidth(2);
+      pdfLandscape.setLineDashPattern([10, 10], 0);
+      pdfLandscape.line(singleWidth, 0, singleWidth, pdfLandscapeHeight);
       
-      pdf.save(`Invoice_${data.invoiceNumber}.pdf`);
+      pdfLandscape.save(`Invoice_${data.invoiceNumber}_Landscape.pdf`);
+
+      // --- 2. Portrait PDF (Stacked Vertically) ---
+      const pdfPortraitWidth = singleWidth;
+      const pdfPortraitHeight = singleHeight * 2;
+      
+      const pdfPortrait = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [pdfPortraitWidth, pdfPortraitHeight]
+      });
+      
+      // Draw first copy (top)
+      pdfPortrait.addImage(imgData, 'PNG', 0, 0, singleWidth, singleHeight);
+      // Draw second copy (bottom)
+      pdfPortrait.addImage(imgData, 'PNG', 0, singleHeight, singleWidth, singleHeight);
+      
+      // Add a dashed line in the middle
+      pdfPortrait.setDrawColor(200, 200, 200);
+      pdfPortrait.setLineWidth(2);
+      pdfPortrait.setLineDashPattern([10, 10], 0);
+      pdfPortrait.line(0, singleHeight, pdfPortraitWidth, singleHeight);
+      
+      pdfPortrait.save(`Invoice_${data.invoiceNumber}_Portrait.pdf`);
+
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('حدث خطأ أثناء إنشاء ملف PDF');
