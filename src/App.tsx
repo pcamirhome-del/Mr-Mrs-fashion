@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Printer, Plus, Trash2, Image as ImageIcon, Settings, X, FileDown, FileText, Loader2, Eye, Save, History, Edit } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
+import { db } from './firebase';
+import { collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
 interface InvoiceItem {
   id: string;
@@ -29,6 +31,24 @@ interface InvoiceData {
   footerText: string;
   signatureText: string;
 }
+
+const initialData: InvoiceData = {
+  invoiceNumber: '',
+  date: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
+  customerName: '',
+  customerAddress: '',
+  phone1: '',
+  phone2: '',
+  items: [{ id: '1', name: '', quantity: 1, price: 0 }],
+  shippingCost: 0,
+  deposit: 0,
+  logoUrl: '',
+  qrCodeUrl: '',
+  companyName: 'Mr & Mrs Fashion',
+  companySubtitle: 'لأرقى الموديلات والأزياء الحديثة',
+  footerText: 'Mr & Mrs Fashion',
+  signatureText: 'إمضاء الاستلام'
+};
 
 export default function App() {
   const [data, setData] = useState<InvoiceData>({
@@ -56,6 +76,75 @@ export default function App() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingWord, setIsGeneratingWord] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
+  const [savedInvoices, setSavedInvoices] = useState<any[]>([]);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSavedInvoices(invoices);
+    }, (error) => {
+      console.error("Error fetching invoices:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSaveInvoice = async () => {
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, 'invoices'), {
+        ...data,
+        createdAt: serverTimestamp()
+      });
+      alert('تم حفظ الفاتورة بنجاح!');
+      setData(initialData);
+      setActiveTab('history');
+      setShowPreview(false);
+    } catch (error) {
+      console.error("Error saving invoice:", error);
+      alert('حدث خطأ أثناء حفظ الفاتورة. تأكد من إعدادات Firebase.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateInvoice = async () => {
+    if (!editingInvoice) return;
+    try {
+      const invoiceRef = doc(db, 'invoices', editingInvoice.id);
+      await updateDoc(invoiceRef, {
+        items: editingInvoice.items,
+        shippingCost: editingInvoice.shippingCost,
+        phone1: editingInvoice.phone1,
+        phone2: editingInvoice.phone2,
+        customerAddress: editingInvoice.customerAddress,
+        deposit: editingInvoice.deposit
+      });
+      
+      // Update the current preview data if it's the same invoice
+      if (data.invoiceNumber === editingInvoice.invoiceNumber) {
+        setData({
+          ...data,
+          items: editingInvoice.items,
+          shippingCost: editingInvoice.shippingCost,
+          phone1: editingInvoice.phone1,
+          phone2: editingInvoice.phone2,
+          customerAddress: editingInvoice.customerAddress,
+          deposit: editingInvoice.deposit
+        });
+      }
+      
+      alert('تم تحديث الفاتورة بنجاح!');
+      setEditingInvoice(null);
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      alert('حدث خطأ أثناء تحديث الفاتورة');
+    }
+  };
 
   const calculateSubtotal = () => {
     return data.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
@@ -514,19 +603,63 @@ export default function App() {
         
         {/* Form Section */}
         <div className="xl:col-span-4 space-y-6 no-print sticky top-8">
-          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
-            <div className="flex justify-between items-center border-b pb-4">
-              <h2 className="text-xl font-bold text-gray-800">إعدادات الفاتورة</h2>
-              <div className="flex gap-2">
-                <button onClick={() => setShowPreview(true)} className="xl:hidden bg-[#3b3b98] text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-sm">
-                  <Eye size={20} />
-                  <span className="text-sm">أظهر الفاتورة</span>
-                </button>
-                <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm" title="الإعدادات">
-                  <Settings size={20} />
-                </button>
-              </div>
+          <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-sm">
+            <button 
+              onClick={() => setActiveTab('create')}
+              className={`flex-1 py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${activeTab === 'create' ? 'bg-[#3b3b98] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Plus size={20} />
+              إنشاء فاتورة
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${activeTab === 'history' ? 'bg-[#3b3b98] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <History size={20} />
+              الفواتير السابقة
+            </button>
+          </div>
+
+          {activeTab === 'history' ? (
+            <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <h2 className="text-xl font-bold text-gray-800 border-b pb-4 mb-4">الفواتير المحفوظة</h2>
+              {savedInvoices.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">لا توجد فواتير سابقة</p>
+              ) : (
+                savedInvoices.map(inv => (
+                  <div key={inv.id} onClick={() => {
+                    setData(inv);
+                    setShowPreview(true);
+                    setEditingInvoice(inv);
+                  }} className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-200 cursor-pointer hover:border-[#3b3b98] transition group">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-black text-[#3b3b98]">#{inv.invoiceNumber}</span>
+                      <span className="text-sm font-bold text-gray-500">{inv.date}</span>
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <p className="font-bold text-gray-800 text-lg">{inv.customerName}</p>
+                      <button className="text-gray-400 group-hover:text-[#3b3b98] transition">
+                        <Edit size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
+              <div className="flex justify-between items-center border-b pb-4">
+                <h2 className="text-xl font-bold text-gray-800">إعدادات الفاتورة</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowPreview(true)} className="xl:hidden bg-[#3b3b98] text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-sm">
+                    <Eye size={20} />
+                    <span className="text-sm">أظهر الفاتورة</span>
+                  </button>
+                  <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition font-bold shadow-sm" title="الإعدادات">
+                    <Settings size={20} />
+                  </button>
+                </div>
+              </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -602,6 +735,7 @@ export default function App() {
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Preview Section */}
@@ -623,6 +757,10 @@ export default function App() {
             <button onClick={downloadWord} disabled={isGeneratingWord} className="bg-blue-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition font-bold shadow-md disabled:opacity-50">
               {isGeneratingWord ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
               <span>تحميل Word (قابل للتعديل)</span>
+            </button>
+            <button onClick={handleSaveInvoice} disabled={isSaving} className="bg-emerald-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-700 transition font-bold shadow-md disabled:opacity-50">
+              {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+              <span>حفظ الفاتورة</span>
             </button>
           </div>
 
@@ -754,6 +892,110 @@ export default function App() {
         </div>
 
       </div>
+      {/* Edit Modal */}
+      {editingInvoice && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 no-print" dir="rtl">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+              <h2 className="text-2xl font-bold text-[#3b3b98]">تعديل الفاتورة #{editingInvoice.invoiceNumber}</h2>
+              <button onClick={() => setEditingInvoice(null)} className="text-gray-500 hover:text-red-500 transition">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="space-y-6">
+              {/* Items */}
+              <div>
+                <h3 className="font-bold text-gray-700 mb-3">الأصناف</h3>
+                {editingInvoice.items.map((item: any, index: number) => (
+                  <div key={item.id} className="flex gap-3 mb-3">
+                    <input 
+                      type="text" 
+                      value={item.name} 
+                      onChange={(e) => {
+                        const newItems = [...editingInvoice.items];
+                        newItems[index].name = e.target.value;
+                        setEditingInvoice({...editingInvoice, items: newItems});
+                      }}
+                      className="flex-grow p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none"
+                      placeholder="اسم الصنف"
+                    />
+                    <input 
+                      type="number" 
+                      value={item.price} 
+                      onChange={(e) => {
+                        const newItems = [...editingInvoice.items];
+                        newItems[index].price = Number(e.target.value);
+                        setEditingInvoice({...editingInvoice, items: newItems});
+                      }}
+                      className="w-32 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none text-center"
+                      placeholder="السعر"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Other Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">مصاريف الشحن</label>
+                  <input 
+                    type="number" 
+                    value={editingInvoice.shippingCost} 
+                    onChange={(e) => setEditingInvoice({...editingInvoice, shippingCost: Number(e.target.value)})}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">المدفوع مقدماً</label>
+                  <input 
+                    type="number" 
+                    value={editingInvoice.deposit} 
+                    onChange={(e) => setEditingInvoice({...editingInvoice, deposit: Number(e.target.value)})}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف 1</label>
+                  <input 
+                    type="text" 
+                    value={editingInvoice.phone1} 
+                    onChange={(e) => setEditingInvoice({...editingInvoice, phone1: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none text-left" dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف 2</label>
+                  <input 
+                    type="text" 
+                    value={editingInvoice.phone2 || ''} 
+                    onChange={(e) => setEditingInvoice({...editingInvoice, phone2: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none text-left" dir="ltr"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">العنوان</label>
+                  <input 
+                    type="text" 
+                    value={editingInvoice.customerAddress} 
+                    onChange={(e) => setEditingInvoice({...editingInvoice, customerAddress: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#3b3b98] outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end gap-3 pt-4 border-t">
+              <button onClick={() => setEditingInvoice(null)} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
+                إلغاء
+              </button>
+              <button onClick={handleUpdateInvoice} className="px-6 py-3 rounded-xl font-bold text-white bg-[#3b3b98] hover:bg-indigo-800 transition">
+                حفظ التعديلات
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
