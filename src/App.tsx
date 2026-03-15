@@ -89,11 +89,11 @@ export default function App() {
             <head>
               <title>طباعة الفاتورة - ${data.invoiceNumber}</title>
               <style>
-                @page { size: landscape; margin: 0; }
-                body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: white; height: 100vh; }
-                .container { display: flex; width: 100%; height: 100%; }
-                .half { width: 50%; height: 100%; display: flex; justify-content: center; align-items: center; border-left: 1px dashed #ccc; box-sizing: border-box; padding: 10px; }
-                .half:last-child { border-left: none; }
+                @page { size: portrait; margin: 0; }
+                body { margin: 0; padding: 0; display: flex; flex-direction: column; background: white; height: 100vh; }
+                .container { display: flex; flex-direction: column; width: 100%; height: 100%; }
+                .half { width: 100%; height: 50%; display: flex; justify-content: center; align-items: center; border-bottom: 1px dashed #ccc; box-sizing: border-box; }
+                .half:last-child { border-bottom: none; }
                 img { max-width: 100%; max-height: 100%; object-fit: contain; }
               </style>
             </head>
@@ -145,30 +145,6 @@ export default function App() {
       const singleWidth = element.offsetWidth;
       const singleHeight = element.scrollHeight;
       
-      // --- 1. Landscape PDF (Side by Side) ---
-      const pdfLandscapeWidth = singleWidth * 2;
-      const pdfLandscapeHeight = singleHeight;
-      
-      const pdfLandscape = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [pdfLandscapeWidth, pdfLandscapeHeight]
-      });
-      
-      // Draw first copy (right side in RTL)
-      pdfLandscape.addImage(imgData, 'PNG', singleWidth, 0, singleWidth, singleHeight);
-      // Draw second copy (left side in RTL)
-      pdfLandscape.addImage(imgData, 'PNG', 0, 0, singleWidth, singleHeight);
-      
-      // Add a dashed line in the middle
-      pdfLandscape.setDrawColor(200, 200, 200);
-      pdfLandscape.setLineWidth(2);
-      pdfLandscape.setLineDashPattern([10, 10], 0);
-      pdfLandscape.line(singleWidth, 0, singleWidth, pdfLandscapeHeight);
-      
-      pdfLandscape.save(`Invoice_${data.invoiceNumber}_Landscape.pdf`);
-
-      // --- 2. Portrait PDF (Stacked Vertically) ---
       const pdfPortraitWidth = singleWidth;
       const pdfPortraitHeight = singleHeight * 2;
       
@@ -189,7 +165,7 @@ export default function App() {
       pdfPortrait.setLineDashPattern([10, 10], 0);
       pdfPortrait.line(0, singleHeight, pdfPortraitWidth, singleHeight);
       
-      pdfPortrait.save(`Invoice_${data.invoiceNumber}_Portrait.pdf`);
+      pdfPortrait.save(`Invoice_${data.invoiceNumber}.pdf`);
 
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -575,7 +551,7 @@ export default function App() {
           </div>
 
           <div className="flex justify-center min-w-max p-4">
-            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-12 w-[21cm] min-h-[29.7cm] flex flex-col invoice-container relative mx-auto" dir="rtl">
+            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-8 w-[21cm] min-h-[14.85cm] flex flex-col invoice-container relative mx-auto" dir="rtl">
               
               {/* Header */}
               <div className="flex justify-between items-start">
@@ -605,10 +581,10 @@ export default function App() {
               </div>
 
               {/* Blue Line */}
-              <div className="h-1.5 bg-[#4f46e5] w-full my-10 rounded-full"></div>
+              <div className="h-1.5 bg-[#4f46e5] w-full my-6 rounded-full"></div>
 
               {/* Customer Info */}
-              <div className="bg-[#f8f9fa] rounded-3xl p-8 flex justify-between items-center mb-10 border border-[#f3f4f6]">
+              <div className="bg-[#f8f9fa] rounded-3xl p-6 flex justify-between items-center mb-6 border border-[#f3f4f6]">
                 <div className="text-right">
                   <p className="text-[#9ca3af] text-sm font-bold mb-2">بيانات العميل</p>
                   <h2 className="text-3xl font-bold text-[#111827]">{data.customerName}</h2>
@@ -648,7 +624,7 @@ export default function App() {
               <div className="border-b-[3px] border-[#1f2937] mb-4 mt-6"></div>
 
               {/* Totals and QR */}
-              <div className="flex justify-between items-start mb-12">
+              <div className="flex justify-between items-start mb-6">
                 <div className="w-80">
                   <div className="flex justify-between text-[#6b7280] font-bold text-xl mb-3 px-2">
                     <span>مصاريف الشحن</span>
@@ -687,7 +663,7 @@ export default function App() {
               </div>
 
               {/* Footer */}
-              <div className="flex justify-between items-end mt-auto pt-8">
+              <div className="flex justify-between items-end mt-auto pt-4">
                 <div className="text-[#d1d5db] italic font-bold text-2xl" style={{ fontFamily: 'Georgia, serif' }}>
                   {data.footerText}
                 </div>
