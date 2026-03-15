@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
-import { db, isFirebaseConfigured } from './firebase';
+import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from './firebase';
 import { collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
 interface InvoiceItem {
@@ -111,7 +111,7 @@ export default function App() {
           localStorage.setItem('invoices', JSON.stringify(invoices));
         }
       }, (error) => {
-        console.error("Error fetching invoices:", error);
+        handleFirestoreError(error, OperationType.LIST, 'invoices');
       });
       return () => unsubscribe();
     }
@@ -167,6 +167,9 @@ export default function App() {
           ]);
           savedToFirebase = true;
         } catch (e: any) {
+          if (e.message?.includes('Missing or insufficient permissions')) {
+            handleFirestoreError(e, OperationType.CREATE, 'invoices');
+          }
           console.warn("Firebase save failed or timed out:", e);
         }
       }
@@ -222,6 +225,9 @@ export default function App() {
           ]);
           updatedInFirebase = true;
         } catch (e: any) {
+          if (e.message?.includes('Missing or insufficient permissions')) {
+            handleFirestoreError(e, OperationType.UPDATE, `invoices/${editingInvoice.id}`);
+          }
           console.warn("Firebase update failed or timed out:", e);
         }
       }

@@ -19,3 +19,50 @@ const app = initializeApp(firebaseConfig);
 
 // تهيئة قاعدة بيانات Firestore
 export const db = getFirestore(app);
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+    tenantId?: string;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  if (errInfo.error.includes('Missing or insufficient permissions')) {
+    alert('خطأ في الصلاحيات: يرجى تحديث قواعد أمان Firestore (Security Rules) للسماح بالقراءة والكتابة.');
+  }
+  
+  throw new Error(JSON.stringify(errInfo));
+}
