@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from './firebase';
-import { collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
 interface InvoiceItem {
   id: string;
@@ -276,6 +276,37 @@ export default function App() {
       alert('حدث خطأ أثناء تحديث الفاتورة');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteInvoice = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) return;
+    
+    try {
+      if (isFirebaseConfigured) {
+        try {
+          await deleteDoc(doc(db, 'invoices', id));
+        } catch (error: any) {
+          if (error.message?.includes('Missing or insufficient permissions')) {
+            handleFirestoreError(error, OperationType.DELETE, `invoices/${id}`);
+          }
+          console.warn("Firebase delete failed:", error);
+        }
+      }
+      
+      const updatedInvoices = savedInvoices.filter(inv => inv.id !== id);
+      setSavedInvoices(updatedInvoices);
+      localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+      
+      if (editingInvoice?.id === id) {
+        handleCreateNewInvoice();
+      }
+      
+      alert('تم حذف الفاتورة بنجاح');
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      alert('حدث خطأ أثناء حذف الفاتورة');
     }
   };
 
@@ -655,6 +686,11 @@ export default function App() {
     });
   };
 
+  const totalSales = savedInvoices.reduce((sum, inv) => {
+    const invSubtotal = inv.items.reduce((itemSum: number, item: any) => itemSum + (item.quantity * item.price), 0);
+    return sum + invSubtotal;
+  }, 0);
+
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8 font-sans" dir="rtl">
       
@@ -756,6 +792,12 @@ export default function App() {
           {activeTab === 'history' ? (
             <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <h2 className="text-xl font-bold text-gray-800 border-b pb-4 mb-4">الفواتير المحفوظة</h2>
+              
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-4 flex justify-between items-center">
+                <span className="font-bold text-indigo-900">إجمالي المبيعات (بدون التوصيل):</span>
+                <span className="text-xl font-black text-[#3b3b98]">{totalSales} ج.م</span>
+              </div>
+
               {savedInvoices.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">لا توجد فواتير سابقة</p>
               ) : (
@@ -771,9 +813,17 @@ export default function App() {
                     </div>
                     <div className="flex justify-between items-end">
                       <p className="font-bold text-gray-800 text-lg">{inv.customerName}</p>
-                      <button className="text-gray-400 group-hover:text-[#3b3b98] transition">
-                        <Edit size={18} />
-                      </button>
+                      <div className="flex gap-2">
+                        <button className="text-gray-400 hover:text-[#3b3b98] transition p-1">
+                          <Edit size={18} />
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteInvoice(e, inv.id)} 
+                          className="text-gray-400 hover:text-red-500 transition p-1"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

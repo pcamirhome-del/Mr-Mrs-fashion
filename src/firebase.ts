@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // قم بوضع مفتاح Firebase الخاص بك هنا
 // يمكنك الحصول عليه من إعدادات مشروعك في Firebase Console
@@ -19,6 +20,7 @@ const app = initializeApp(firebaseConfig);
 
 // تهيئة قاعدة بيانات Firestore
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
 export enum OperationType {
   CREATE = 'create',
@@ -52,7 +54,17 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      providerInfo: []
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email || undefined,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId || undefined,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
     },
     operationType,
     path
