@@ -55,6 +55,7 @@ export default function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingWord, setIsGeneratingWord] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const calculateSubtotal = () => {
     return data.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
@@ -64,8 +65,64 @@ export default function App() {
     return calculateSubtotal() + data.shippingCost;
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    const element = document.getElementById('invoice-preview');
+    if (!element) return;
+    
+    setIsPrinting(true);
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 2, // 2 is enough for print
+        useCORS: true,
+        logging: false,
+        scrollY: 0,
+        windowHeight: element.scrollHeight,
+        height: element.scrollHeight
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html dir="rtl">
+            <head>
+              <title>طباعة الفاتورة - ${data.invoiceNumber}</title>
+              <style>
+                @page { size: landscape; margin: 0; }
+                body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: white; height: 100vh; }
+                .container { display: flex; width: 100%; height: 100%; }
+                .half { width: 50%; height: 100%; display: flex; justify-content: center; align-items: center; border-left: 1px dashed #ccc; box-sizing: border-box; padding: 10px; }
+                .half:last-child { border-left: none; }
+                img { max-width: 100%; max-height: 100%; object-fit: contain; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="half"><img src="${imgData}" /></div>
+                <div class="half"><img src="${imgData}" /></div>
+              </div>
+              <script>
+                window.onload = () => {
+                  setTimeout(() => {
+                    window.print();
+                    window.close();
+                  }, 500);
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      } else {
+        alert('يرجى السماح بالنوافذ المنبثقة (Pop-ups) لطباعة الفاتورة');
+      }
+    } catch (error) {
+      console.error('Error printing:', error);
+      alert('حدث خطأ أثناء تجهيز الطباعة');
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const downloadPDF = async () => {
@@ -85,16 +142,29 @@ export default function App() {
       
       const imgData = canvas.toDataURL('image/png');
       
-      const pdfWidth = element.offsetWidth;
-      const pdfHeight = element.scrollHeight;
+      const singleWidth = element.offsetWidth;
+      const singleHeight = element.scrollHeight;
+      
+      const pdfWidth = singleWidth * 2;
+      const pdfHeight = singleHeight;
       
       const pdf = new jsPDF({
-        orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+        orientation: 'landscape',
         unit: 'px',
         format: [pdfWidth, pdfHeight]
       });
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // Draw first copy (right side in RTL)
+      pdf.addImage(imgData, 'PNG', singleWidth, 0, singleWidth, singleHeight);
+      // Draw second copy (left side in RTL)
+      pdf.addImage(imgData, 'PNG', 0, 0, singleWidth, singleHeight);
+      
+      // Add a dashed line in the middle
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(2);
+      pdf.setLineDashPattern([10, 10], 0);
+      pdf.line(singleWidth, 0, singleWidth, pdfHeight);
+      
       pdf.save(`Invoice_${data.invoiceNumber}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -465,8 +535,8 @@ export default function App() {
             <button onClick={() => setShowPreview(false)} className="xl:hidden bg-white text-gray-800 px-4 py-2 rounded-xl flex items-center gap-2 font-bold shadow-sm border hover:bg-gray-50">
               <X size={20} /> إغلاق
             </button>
-            <button onClick={handlePrint} className="bg-[#3b3b98] text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-md">
-              <Printer size={20} />
+            <button onClick={handlePrint} disabled={isPrinting} className="bg-[#3b3b98] text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-800 transition font-bold shadow-md disabled:opacity-50">
+              {isPrinting ? <Loader2 size={20} className="animate-spin" /> : <Printer size={20} />}
               <span>طباعة</span>
             </button>
             <button onClick={downloadPDF} disabled={isGeneratingPDF} className="bg-red-600 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition font-bold shadow-md disabled:opacity-50">
