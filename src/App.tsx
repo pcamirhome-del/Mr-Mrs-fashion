@@ -83,21 +83,37 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    // Always load local invoices first for instant display
+    const localInvoices = localStorage.getItem('invoices');
+    if (localInvoices) {
+      try {
+        setSavedInvoices(JSON.parse(localInvoices));
+      } catch (e) {
+        console.error("Error parsing local invoices", e);
+      }
+    }
+
     if (isFirebaseConfigured) {
       const q = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setSavedInvoices(invoices);
+        // Only update if we have real data from server or optimistic local writes
+        if (!snapshot.empty || snapshot.metadata.fromCache === false) {
+          const invoices = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              // Convert Firestore timestamp to ISO string for consistent local storage
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt
+            };
+          });
+          setSavedInvoices(invoices);
+          localStorage.setItem('invoices', JSON.stringify(invoices));
+        }
       }, (error) => {
         console.error("Error fetching invoices:", error);
       });
       return () => unsubscribe();
-    } else {
-      // Fallback to localStorage
-      const localInvoices = localStorage.getItem('invoices');
-      if (localInvoices) {
-        setSavedInvoices(JSON.parse(localInvoices));
-      }
     }
   }, []);
 
@@ -138,12 +154,24 @@ export default function App() {
   const handleSaveInvoice = async () => {
     setIsSaving(true);
     try {
+      let savedToFirebase = false;
       if (isFirebaseConfigured) {
-        await addDoc(collection(db, 'invoices'), {
-          ...data,
-          createdAt: serverTimestamp()
-        });
-      } else {
+        try {
+          // Add a 5-second timeout to prevent hanging if Firestore is not created
+          await Promise.race([
+            addDoc(collection(db, 'invoices'), {
+              ...data,
+              createdAt: serverTimestamp()
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
+          ]);
+          savedToFirebase = true;
+        } catch (e: any) {
+          console.warn("Firebase save failed or timed out:", e);
+        }
+      }
+
+      if (!savedToFirebase) {
         // Fallback to localStorage
         const newInvoice = {
           ...data,
@@ -153,14 +181,21 @@ export default function App() {
         const updatedInvoices = [newInvoice, ...savedInvoices];
         setSavedInvoices(updatedInvoices);
         localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+        
+        if (isFirebaseConfigured) {
+          alert('تنبيه: لم يتم الاتصال بقاعدة البيانات السحابية (تأكد من تفعيل Firestore Database في منصة Firebase). تم الحفظ محلياً بنجاح!');
+        } else {
+          alert('تم حفظ الفاتورة محلياً بنجاح!');
+        }
+      } else {
+        alert('تم حفظ الفاتورة بنجاح!');
       }
       
-      alert('تم حفظ الفاتورة بنجاح!');
       setActiveTab('history');
       setShowPreview(false);
     } catch (error) {
       console.error("Error saving invoice:", error);
-      alert('حدث خطأ أثناء حفظ الفاتورة. تأكد من إعدادات Firebase.');
+      alert('حدث خطأ أثناء حفظ الفاتورة.');
     } finally {
       setIsSaving(false);
     }
@@ -168,18 +203,30 @@ export default function App() {
 
   const handleUpdateInvoice = async () => {
     if (!editingInvoice) return;
+    setIsSaving(true);
     try {
+      let updatedInFirebase = false;
       if (isFirebaseConfigured) {
-        const invoiceRef = doc(db, 'invoices', editingInvoice.id);
-        await updateDoc(invoiceRef, {
-          items: editingInvoice.items,
-          shippingCost: editingInvoice.shippingCost,
-          phone1: editingInvoice.phone1,
-          phone2: editingInvoice.phone2,
-          customerAddress: editingInvoice.customerAddress,
-          deposit: editingInvoice.deposit
-        });
-      } else {
+        try {
+          const invoiceRef = doc(db, 'invoices', editingInvoice.id);
+          await Promise.race([
+            updateDoc(invoiceRef, {
+              items: editingInvoice.items,
+              shippingCost: editingInvoice.shippingCost,
+              phone1: editingInvoice.phone1,
+              phone2: editingInvoice.phone2,
+              customerAddress: editingInvoice.customerAddress,
+              deposit: editingInvoice.deposit
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
+          ]);
+          updatedInFirebase = true;
+        } catch (e: any) {
+          console.warn("Firebase update failed or timed out:", e);
+        }
+      }
+
+      if (!updatedInFirebase) {
         // Fallback to localStorage
         const updatedInvoices = savedInvoices.map(inv => 
           inv.id === editingInvoice.id ? {
@@ -194,6 +241,14 @@ export default function App() {
         );
         setSavedInvoices(updatedInvoices);
         localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+        
+        if (isFirebaseConfigured) {
+          alert('تنبيه: لم يتم الاتصال بقاعدة البيانات السحابية. تم التحديث محلياً بنجاح!');
+        } else {
+          alert('تم تحديث الفاتورة محلياً بنجاح!');
+        }
+      } else {
+        alert('تم تحديث الفاتورة بنجاح!');
       }
       
       // Update the current preview data if it's the same invoice
@@ -209,11 +264,12 @@ export default function App() {
         });
       }
       
-      alert('تم تحديث الفاتورة بنجاح!');
       setEditingInvoice(null);
     } catch (error) {
       console.error("Error updating invoice:", error);
       alert('حدث خطأ أثناء تحديث الفاتورة');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1060,8 +1116,8 @@ export default function App() {
               <button onClick={() => setEditingInvoice(null)} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
                 إلغاء
               </button>
-              <button onClick={handleUpdateInvoice} className="px-6 py-3 rounded-xl font-bold text-white bg-[#3b3b98] hover:bg-indigo-800 transition">
-                حفظ التعديلات
+              <button onClick={handleUpdateInvoice} disabled={isSaving} className="px-6 py-3 rounded-xl font-bold text-white bg-[#3b3b98] hover:bg-indigo-800 transition disabled:opacity-50">
+                {isSaving ? 'جاري الحفظ...' : 'حفظ التعديلات'}
               </button>
             </div>
           </div>
