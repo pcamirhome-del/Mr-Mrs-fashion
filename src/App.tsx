@@ -72,7 +72,7 @@ export default function App() {
     setIsPrinting(true);
     try {
       const canvas = await html2canvas(element, { 
-        scale: 2, // 2 is enough for print
+        scale: 3, // جودة أعلى للطباعة
         useCORS: true,
         logging: false,
         scrollY: 0,
@@ -85,29 +85,105 @@ export default function App() {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(`
+          <!DOCTYPE html>
           <html dir="rtl">
             <head>
               <title>طباعة الفاتورة - ${data.invoiceNumber}</title>
               <style>
-                @page { size: portrait; margin: 0; }
-                body { margin: 0; padding: 0; display: flex; flex-direction: column; background: white; height: 100vh; }
-                .container { display: flex; flex-direction: column; width: 100%; height: 100%; }
-                .half { width: 100%; height: 50%; display: flex; justify-content: center; align-items: center; border-bottom: 1px dashed #ccc; box-sizing: border-box; }
-                .half:last-child { border-bottom: none; }
-                img { max-width: 100%; max-height: 100%; object-fit: contain; }
+                /* إعدادات الشاشة قبل الطباعة */
+                body { 
+                  background: #f3f4f6; 
+                  display: flex; 
+                  flex-direction: column; 
+                  align-items: center; 
+                  justify-content: flex-start; 
+                  min-height: 100vh; 
+                  font-family: system-ui, -apple-system, sans-serif;
+                  margin: 0;
+                  padding: 40px 20px;
+                }
+                .no-print { display: flex; flex-direction: column; align-items: center; width: 100%; }
+                .print-btn { background: #4f46e5; color: white; padding: 15px 40px; border: none; border-radius: 10px; font-size: 20px; font-weight: bold; cursor: pointer; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background 0.3s; }
+                .print-btn:hover { background: #4338ca; }
+                .warning { color: #9a3412; background: #ffedd5; padding: 20px; border-radius: 10px; font-weight: bold; max-width: 600px; text-align: center; margin-bottom: 30px; border: 2px solid #fdba74; font-size: 18px; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+                
+                .container { display: none; } /* إخفاء الفاتورة في وضع الشاشة العادي لتجنب التكرار البصري */
+
+                /* إعدادات الطباعة الصارمة */
+                @media print {
+                  @page { 
+                    size: A4 portrait; 
+                    margin: 0mm !important; 
+                  }
+                  * { 
+                    box-sizing: border-box !important; 
+                  }
+                  html, body { 
+                    margin: 0 !important; 
+                    padding: 0 !important; 
+                    width: 100vw !important; 
+                    height: 100vh !important; 
+                    background: white !important; 
+                    overflow: hidden !important;
+                  }
+                  .no-print { 
+                    display: none !important; 
+                  }
+                  .container { 
+                    display: flex !important; 
+                    flex-direction: column !important; 
+                    width: 100vw !important; 
+                    height: 100vh !important; 
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    /* إجبار التمدد لسد أي فراغ جانبي قد يتركه المتصفح */
+                    transform: scaleX(1.02) scaleY(1.01) !important; 
+                    transform-origin: center top !important;
+                  }
+                  .half { 
+                    width: 100vw !important; 
+                    height: 50vh !important; 
+                    display: block !important; 
+                    border-bottom: 1px dashed #ccc !important; 
+                    margin: 0 !important; 
+                    padding: 0 !important;
+                    overflow: hidden !important;
+                  }
+                  .half:last-child { 
+                    border-bottom: none !important; 
+                  }
+                  /* إجبار الصورة على التمدد لملء العرض والارتفاع بالكامل (Stretching) */
+                  img { 
+                    width: 100vw !important; 
+                    height: 50vh !important; 
+                    object-fit: fill !important; 
+                    display: block !important; 
+                    margin: 0 !important; 
+                    padding: 0 !important; 
+                  }
+                }
               </style>
             </head>
             <body>
+              <div class="no-print">
+                <div class="warning">
+                  ⚠️ تنبيه هام جداً للطباعة المثالية:<br/><br/>
+                  قبل تأكيد الطباعة، يرجى التأكد من تغيير إعدادات الهوامش (Margins) في نافذة الطباعة إلى <strong>"بلا" (None)</strong> لضمان طباعة الفاتورة من الحافة للحافة.
+                </div>
+                <button class="print-btn" onclick="window.print()">🖨️ طباعة الفاتورة الآن</button>
+              </div>
+
               <div class="container">
                 <div class="half"><img src="${imgData}" /></div>
                 <div class="half"><img src="${imgData}" /></div>
               </div>
+              
               <script>
                 window.onload = () => {
+                  // فتح نافذة الطباعة تلقائياً بعد التحميل
                   setTimeout(() => {
                     window.print();
-                    window.close();
-                  }, 500);
+                  }, 800);
                 };
               </script>
             </body>
@@ -142,30 +218,30 @@ export default function App() {
       
       const imgData = canvas.toDataURL('image/png');
       
-      const singleWidth = element.offsetWidth;
-      const singleHeight = element.scrollHeight;
-      
-      const pdfPortraitWidth = singleWidth;
-      const pdfPortraitHeight = singleHeight * 2;
-      
-      const pdfPortrait = new jsPDF({
+      // استخدام مقاسات A4 القياسية (بالملليمتر)
+      const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'px',
-        format: [pdfPortraitWidth, pdfPortraitHeight]
+        unit: 'mm',
+        format: 'a4'
       });
       
-      // Draw first copy (top)
-      pdfPortrait.addImage(imgData, 'PNG', 0, 0, singleWidth, singleHeight);
-      // Draw second copy (bottom)
-      pdfPortrait.addImage(imgData, 'PNG', 0, singleHeight, singleWidth, singleHeight);
+      const pageWidth = pdf.internal.pageSize.getWidth(); // 210mm
+      const pageHeight = pdf.internal.pageSize.getHeight(); // 297mm
+      const halfHeight = pageHeight / 2;
       
-      // Add a dashed line in the middle
-      pdfPortrait.setDrawColor(200, 200, 200);
-      pdfPortrait.setLineWidth(2);
-      pdfPortrait.setLineDashPattern([10, 10], 0);
-      pdfPortrait.line(0, singleHeight, pdfPortraitWidth, singleHeight);
+      // رسم النسخة الأولى (بالأعلى) - ممتدة بعرض الصفحة بالكامل
+      pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, halfHeight);
       
-      pdfPortrait.save(`Invoice_${data.invoiceNumber}.pdf`);
+      // رسم النسخة الثانية (بالأسفل) - ممتدة بعرض الصفحة بالكامل
+      pdf.addImage(imgData, 'PNG', 0, halfHeight, pageWidth, halfHeight);
+      
+      // إضافة خط متقطع في المنتصف
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.setLineDashPattern([3, 3], 0);
+      pdf.line(0, halfHeight, pageWidth, halfHeight);
+      
+      pdf.save(`Invoice_${data.invoiceNumber}.pdf`);
 
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -551,7 +627,7 @@ export default function App() {
           </div>
 
           <div className="flex justify-center min-w-max p-4">
-            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] p-8 w-[21cm] min-h-[14.85cm] flex flex-col invoice-container relative mx-auto" dir="rtl">
+            <div id="invoice-preview" className="bg-[#ffffff] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)] py-8 px-2 sm:px-4 w-[21cm] min-h-[14.85cm] flex flex-col invoice-container relative mx-auto" dir="rtl">
               
               {/* Header */}
               <div className="flex justify-between items-start">
