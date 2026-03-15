@@ -93,6 +93,40 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  const handleCreateNewInvoice = () => {
+    let nextNumber = 'AR-210';
+    if (savedInvoices.length > 0) {
+      const lastInvoice = savedInvoices[0];
+      const lastNumberStr = lastInvoice.invoiceNumber || '';
+      const match = lastNumberStr.match(/^(.*?)(\d+)(\D*)$/);
+      if (match) {
+        const prefix = match[1];
+        const numStr = match[2];
+        const suffix = match[3];
+        const num = parseInt(numStr, 10);
+        const nextNumStr = (num + 10).toString().padStart(numStr.length, '0');
+        nextNumber = `${prefix}${nextNumStr}${suffix}`;
+      } else {
+        nextNumber = lastNumberStr + '-10';
+      }
+    }
+
+    setData({
+      ...initialData,
+      invoiceNumber: nextNumber,
+      date: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
+      companyName: data.companyName,
+      companySubtitle: data.companySubtitle,
+      footerText: data.footerText,
+      signatureText: data.signatureText,
+      logoUrl: data.logoUrl,
+      qrCodeUrl: data.qrCodeUrl
+    });
+    setActiveTab('create');
+    setShowPreview(false);
+    setEditingInvoice(null);
+  };
+
   const handleSaveInvoice = async () => {
     setIsSaving(true);
     try {
@@ -101,7 +135,6 @@ export default function App() {
         createdAt: serverTimestamp()
       });
       alert('تم حفظ الفاتورة بنجاح!');
-      setData(initialData);
       setActiveTab('history');
       setShowPreview(false);
     } catch (error) {
@@ -605,7 +638,7 @@ export default function App() {
         <div className="xl:col-span-4 space-y-6 no-print sticky top-8">
           <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-sm">
             <button 
-              onClick={() => setActiveTab('create')}
+              onClick={handleCreateNewInvoice}
               className={`flex-1 py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${activeTab === 'create' ? 'bg-[#3b3b98] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Plus size={20} />
