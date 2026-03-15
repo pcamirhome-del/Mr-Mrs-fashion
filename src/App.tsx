@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
-import { db } from './firebase';
+import { db, isFirebaseConfigured } from './firebase';
 import { collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
 interface InvoiceItem {
@@ -83,14 +83,22 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSavedInvoices(invoices);
-    }, (error) => {
-      console.error("Error fetching invoices:", error);
-    });
-    return () => unsubscribe();
+    if (isFirebaseConfigured) {
+      const q = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setSavedInvoices(invoices);
+      }, (error) => {
+        console.error("Error fetching invoices:", error);
+      });
+      return () => unsubscribe();
+    } else {
+      // Fallback to localStorage
+      const localInvoices = localStorage.getItem('invoices');
+      if (localInvoices) {
+        setSavedInvoices(JSON.parse(localInvoices));
+      }
+    }
   }, []);
 
   const handleCreateNewInvoice = () => {
@@ -130,10 +138,23 @@ export default function App() {
   const handleSaveInvoice = async () => {
     setIsSaving(true);
     try {
-      await addDoc(collection(db, 'invoices'), {
-        ...data,
-        createdAt: serverTimestamp()
-      });
+      if (isFirebaseConfigured) {
+        await addDoc(collection(db, 'invoices'), {
+          ...data,
+          createdAt: serverTimestamp()
+        });
+      } else {
+        // Fallback to localStorage
+        const newInvoice = {
+          ...data,
+          id: Date.now().toString(),
+          createdAt: new Date().toISOString()
+        };
+        const updatedInvoices = [newInvoice, ...savedInvoices];
+        setSavedInvoices(updatedInvoices);
+        localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+      }
+      
       alert('تم حفظ الفاتورة بنجاح!');
       setActiveTab('history');
       setShowPreview(false);
@@ -148,15 +169,32 @@ export default function App() {
   const handleUpdateInvoice = async () => {
     if (!editingInvoice) return;
     try {
-      const invoiceRef = doc(db, 'invoices', editingInvoice.id);
-      await updateDoc(invoiceRef, {
-        items: editingInvoice.items,
-        shippingCost: editingInvoice.shippingCost,
-        phone1: editingInvoice.phone1,
-        phone2: editingInvoice.phone2,
-        customerAddress: editingInvoice.customerAddress,
-        deposit: editingInvoice.deposit
-      });
+      if (isFirebaseConfigured) {
+        const invoiceRef = doc(db, 'invoices', editingInvoice.id);
+        await updateDoc(invoiceRef, {
+          items: editingInvoice.items,
+          shippingCost: editingInvoice.shippingCost,
+          phone1: editingInvoice.phone1,
+          phone2: editingInvoice.phone2,
+          customerAddress: editingInvoice.customerAddress,
+          deposit: editingInvoice.deposit
+        });
+      } else {
+        // Fallback to localStorage
+        const updatedInvoices = savedInvoices.map(inv => 
+          inv.id === editingInvoice.id ? {
+            ...inv,
+            items: editingInvoice.items,
+            shippingCost: editingInvoice.shippingCost,
+            phone1: editingInvoice.phone1,
+            phone2: editingInvoice.phone2,
+            customerAddress: editingInvoice.customerAddress,
+            deposit: editingInvoice.deposit
+          } : inv
+        );
+        setSavedInvoices(updatedInvoices);
+        localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+      }
       
       // Update the current preview data if it's the same invoice
       if (data.invoiceNumber === editingInvoice.invoiceNumber) {
